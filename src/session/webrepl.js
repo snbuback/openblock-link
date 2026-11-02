@@ -5,7 +5,7 @@ const ansi = require('ansi-string');
 const Session = require('./session');
 const WebRepl = require('../lib/webrepl');
 
-const RECONNECT_ATTEMPTS = 10;
+const RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 1000;
 const POST_RESET_DELAY = 1500;
 
@@ -267,9 +267,13 @@ class WebReplSession extends Session {
             await this._putFile('main.py', Buffer.from(code, 'utf8'));
 
             this.sendstd(`${ansi.clear}Reset device\n`);
-            await this._resetAndReconnect();
+            this._expectedDisconnect = true;
+            await this._client.softReset();
+            // The file is on the board; report success immediately so the
+            // progress dialog closes while the WiFi link restarts.
             this.sendstd(`${ansi.green_dark}Success\n`);
             this.sendRemoteRequest('uploadSuccess', {aborted: false});
+            await this._reconnectAfterReset();
         } catch (err) {
             if (err.message === 'Aborted' || this._abort) {
                 this.sendstd(`${ansi.yellow_dark}Upload aborted.\n`);
@@ -336,16 +340,15 @@ class WebReplSession extends Session {
     }
 
     /**
-     * Soft reset the board and reopen the WebREPL connection so boot output
-     * keeps flowing to the console.
+     * Reopen the WebREPL connection after a soft reset so boot output keeps
+     * flowing to the console.
      * @returns {Promise} - resolved when reconnected or after giving up.
      * @private
      */
-    async _resetAndReconnect () {
-        this._expectedDisconnect = true;
-        await this._client.softReset();
+    async _reconnectAfterReset () {
         await wait(POST_RESET_DELAY);
 
+        if (!this._client) return;
         if (this._client.isOpen()) {
             this._client.clearExpectedClose();
             this._expectedDisconnect = false;
@@ -356,7 +359,9 @@ class WebReplSession extends Session {
         for (let attempt = 0; attempt < RECONNECT_ATTEMPTS; attempt++) {
             if (!this._client) return;
             try {
-                await this._client.reconnect();
+                // The board just rebooted; keep the per-attempt timeout short
+                // so a missing WebREPL server cannot stall the session.
+                await this._client.reconnect(3000);
                 this._expectedDisconnect = false;
                 this._unplugReported = false;
                 this._connected = true;
@@ -388,7 +393,7 @@ class WebReplSession extends Session {
         await wait(500);
         if (!this._client) return;
         try {
-            await this._client.reconnect();
+            await this._client.reconnect(5000);
             this._expectedDisconnect = false;
             this._unplugReported = false;
             this._connected = true;

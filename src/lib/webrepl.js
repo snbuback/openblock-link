@@ -115,6 +115,8 @@ class WebRepl extends EventEmitter {
         this._host = options.host;
         this._port = options.port || WEBREPL_DEFAULT_PORT;
         this._password = options.password || '';
+        this._connectTimeout = options.connectTimeout || WEBREPL_CONNECT_TIMEOUT;
+        this._loginTimeout = options.loginTimeout || WEBREPL_LOGIN_TIMEOUT;
 
         this._ws = null;
         this._closedByUser = false;
@@ -169,16 +171,21 @@ class WebRepl extends EventEmitter {
             this._loginReject = reject;
             this._loginTimer = setTimeout(() => {
                 this._failLogin(new Error('Timed out waiting for the WebREPL password prompt.'));
-            }, WEBREPL_LOGIN_TIMEOUT);
+            }, this._loginTimeout);
             this._openSocket();
         });
     }
 
     /**
      * Reconnect after a soft reset or a dropped link.
+     * @param {number} timeout - optional shorter connect/login timeout.
      * @returns {Promise} - resolved once logged in again.
      */
-    reconnect () {
+    reconnect (timeout) {
+        if (timeout) {
+            this._connectTimeout = timeout;
+            this._loginTimeout = timeout;
+        }
         if (this._ws) {
             this._ws.removeAllListeners();
             try {
@@ -198,7 +205,7 @@ class WebRepl extends EventEmitter {
     _openSocket () {
         const url = `ws://${this._host}:${this._port}/`;
         const ws = new WebSocket(url, {
-            handshakeTimeout: WEBREPL_CONNECT_TIMEOUT,
+            handshakeTimeout: this._connectTimeout,
             perMessageDeflate: false
         });
         this._ws = ws;
@@ -212,7 +219,7 @@ class WebRepl extends EventEmitter {
                     // Already closed.
                 }
             }
-        }, WEBREPL_CONNECT_TIMEOUT);
+        }, this._connectTimeout);
 
         ws.on('open', () => {
             clearTimeout(connectTimer);
