@@ -287,6 +287,7 @@ class WebRepl extends EventEmitter {
         // A repeated password prompt means the password was rejected. The
         // WebREPL server loops on the prompt instead of closing the socket.
         if (!this._loginPhase && this._loginSent && text.indexOf('Password: ') !== -1) {
+            if (this._authFailed) return;
             this._authFailed = true;
             const error = new Error('Authentication failed. Check the WebREPL password.');
             this._failBinary(error);
@@ -427,21 +428,34 @@ class WebRepl extends EventEmitter {
     _writeBinary (buffer, callback) {
         if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
             const error = new Error('WebREPL connection is not open.');
-            if (callback) return callback(error);
+            if (callback) {
+                callback(error);
+                return undefined;
+            }
             return Promise.reject(error);
         }
-        this._ws.send(buffer, {binary: true}, err => {
-            if (callback) callback(err);
+        if (callback) {
+            this._ws.send(buffer, {binary: true}, callback);
+            return undefined;
+        }
+        return new Promise((resolve, reject) => {
+            this._ws.send(buffer, {binary: true}, err => {
+                if (err) reject(err);
+                else resolve();
+            });
         });
-        return Promise.resolve();
     }
 
     _writeText (text) {
         if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
             return Promise.reject(new Error('WebREPL connection is not open.'));
         }
-        this._ws.send(text, {binary: false});
-        return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            this._ws.send(text, {binary: false}, err => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
     }
 
     /**
@@ -645,6 +659,13 @@ class WebRepl extends EventEmitter {
         this._rawRepl = false;
         this._expectedClose = true;
         await this._writeText('\x04');
+    }
+
+    /**
+     * Stop treating the next socket close as an expected post-reset close.
+     */
+    clearExpectedClose () {
+        this._expectedClose = false;
     }
 
     /**

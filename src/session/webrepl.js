@@ -347,12 +347,14 @@ class WebReplSession extends Session {
         await wait(POST_RESET_DELAY);
 
         if (this._client.isOpen()) {
+            this._client.clearExpectedClose();
             this._expectedDisconnect = false;
             this._unplugReported = false;
             return;
         }
 
         for (let attempt = 0; attempt < RECONNECT_ATTEMPTS; attempt++) {
+            if (!this._client) return;
             try {
                 await this._client.reconnect();
                 this._expectedDisconnect = false;
@@ -384,6 +386,7 @@ class WebReplSession extends Session {
             // Already closed.
         }
         await wait(500);
+        if (!this._client) return;
         try {
             await this._client.reconnect();
             this._expectedDisconnect = false;
