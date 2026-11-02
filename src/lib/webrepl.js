@@ -430,13 +430,13 @@ class WebRepl extends EventEmitter {
             const error = new Error('WebREPL connection is not open.');
             if (callback) {
                 callback(error);
-                return undefined;
+                return;
             }
             return Promise.reject(error);
         }
         if (callback) {
             this._ws.send(buffer, {binary: true}, callback);
-            return undefined;
+            return;
         }
         return new Promise((resolve, reject) => {
             this._ws.send(buffer, {binary: true}, err => {
