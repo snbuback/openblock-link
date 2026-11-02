@@ -11,7 +11,8 @@
     "docs": "jsdoc -c .jsdoc.json",
     "lint": "eslint ./src",
     "test": "",
-    "test:multi-server": "node test/start-multi-server.js --log-level=info"
+    "test:multi-server": "node test/start-multi-server.js --log-level=info",
+    "test:webrepl": "node test/webrepl-mock-test.js && node test/webrepl-session-mock-test.js"
   },
   "repository": {
     "type": "git",
